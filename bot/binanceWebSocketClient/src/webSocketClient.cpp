@@ -1,8 +1,9 @@
 #include <boost/asio/co_spawn.hpp>
 #include <boost/asio/detached.hpp>
 #include <boost/asio/use_awaitable.hpp>
+#include <bot/binanceWebSocketClient/webSocketClient.hpp>
 #include <iostream>
-#include <web_client/webSocketClient/webSocketClient.hpp>
+#include <spdlog/spdlog.h>
 
 using namespace boost;
 using beast_tcp_stream = beast::tcp_stream;
@@ -11,9 +12,12 @@ using websocket_stream = beast::websocket::stream<beast_ssl_stream>;
 namespace asio = boost::asio;
 using tcp = asio::ip::tcp;
 
-WebSocketClient::WebSocketClient(asio::io_context& ioc, asio::ssl::context& ssl_ctx)
+WebSocketClient::WebSocketClient(asio::io_context& ioc,
+						   asio::ssl::context& ssl_ctx,
+						   std::shared_ptr<OrderBook> orderBook)
 	: io_context_(ioc)
 	, ws_(beast_ssl_stream(beast_tcp_stream(ioc), ssl_ctx))
+	, orderBook_(orderBook)
 {
 	ws_.binary(false);
 }
@@ -37,7 +41,7 @@ asio::awaitable<void> WebSocketClient::connect(const std::string& host,
 			}
 			catch(const std::exception& ex)
 			{
-				std::cerr << "Exception accured << " << ex.what() << "\n";
+				spdlog::error("Exception {}", ex.what());
 			}
 		}
 		co_await ws_.next_layer().async_handshake(asio::ssl::stream_base::client,
@@ -65,56 +69,10 @@ asio::awaitable<void> WebSocketClient::read_loop()
 			std::string msg(beast::buffers_to_string(buffer.data()));
 
 			auto json_msg = nlohmann::json::parse(msg, nullptr, false);
-			if(json_msg.is_discarded())
-			{
-				std::cerr << "Invalid JSON received: " << msg << std::endl;
-				continue;
-			}
+			orderBook_->update_order_book(json_msg);
 
-			if(!json_msg.contains("b") || !json_msg.contains("a"))
-			{
-				std::cerr << "Unexpected message format: " << msg << std::endl;
-				continue;
-			}
-
-			std::vector<std::pair<double, double>> bids, asks;
-
-			for(const auto& bid : json_msg["b"])
-			{
-				if(bid.is_array() && bid.size() == 2)
-				{
-					double price = std::stod(bid[0].get<std::string>());
-					double volume = std::stod(bid[1].get<std::string>());
-					bids.emplace_back(price, volume);
-				}
-			}
-
-			for(const auto& ask : json_msg["a"])
-			{
-				if(ask.is_array() && ask.size() == 2)
-				{
-					double price = std::stod(ask[0].get<std::string>());
-					double volume = std::stod(ask[1].get<std::string>());
-					asks.emplace_back(price, volume);
-				}
-			}
-
-			std::cout << "\n📈 Order Book Update (BTCUSDT)\n";
-			std::cout << "-----------------------------------------------------------\n";
-			std::cout << "   Bid Price   |  Bid Volume  ||  Ask Price   |  Ask Volume\n";
-			std::cout << "-----------------------------------------------------------\n";
-			for(size_t i = 0; i < std::max(bids.size(), asks.size()); ++i)
-			{
-				std::cout << std::setw(14)
-						<< (i < bids.size() ? std::to_string(bids[i].first) : " ") << " | "
-						<< std::setw(12)
-						<< (i < bids.size() ? std::to_string(bids[i].second) : " ") << " || "
-						<< std::setw(12)
-						<< (i < asks.size() ? std::to_string(asks[i].first) : " ") << " | "
-						<< std::setw(10)
-						<< (i < asks.size() ? std::to_string(asks[i].second) : " ") << "\n";
-			}
-			std::cout << "-----------------------------------------------------------\n";
+			std::cout << "Best bid: " << orderBook_->get_best_bid()
+					<< " | Best ask: " << orderBook_->get_best_ask() << std::endl;
 		}
 	}
 	catch(const std::exception& e)
