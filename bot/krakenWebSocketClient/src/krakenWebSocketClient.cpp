@@ -36,12 +36,12 @@ asio::awaitable<void> KrakenWebSocketClient::connect(const std::string& host,
 			try
 			{
 				co_await lowest_layer.async_connect(endpoint, asio::use_awaitable);
-				std::cout << "✅ Connected to: " << host << ":" << port << target << std::endl;
+                    spdlog::info("✅ Connected to: {} : {}{}", host, port, target);
 				break;
 			}
 			catch(const std::exception& ex)
 			{
-				std::cerr << "Connect error: " << ex.what() << "\n";
+                    spdlog::error("Connect err {}", ex.what());
 			}
 		}
 
@@ -54,34 +54,32 @@ asio::awaitable<void> KrakenWebSocketClient::connect(const std::string& host,
 		co_await ws_.next_layer().async_handshake(asio::ssl::stream_base::client,
 										  asio::use_awaitable);
 
-		std::cout << "✅ SSL handshake successful" << std::endl;
+          spdlog::info("✅ SSL handshake successful");
 
 		try
 		{
-			std::cout << "Attempting to perform WebSocket handshake with host: " << host
-					<< " and target: " << target << std::endl;
+               spdlog::info("Attempting to perform WebSocket handshake with host: {} and target {}", host, target);
+
 			co_await ws_.async_handshake(host, target, asio::use_awaitable);
-			std::cout << "✅ WebSocket handshake successful" << std::endl;
+			spdlog::info("✅ WebSocket handshake successful");
 		}
 		catch(const std::exception& e)
 		{
-			std::cerr << "Error during WebSocket handshake with host: " << host
-					<< " and target: " << target << ": " << e.what() << std::endl;
+               spdlog::error("Error attempting to perform WebSocket handshake with host: {} and target {}", host, target);    
 		}
 
-		std::cout << "✅ Connected to Kraken WS " << host << target << std::endl;
+          spdlog::info("✅ Connected to Kraken WS");
 
-		// Подписка на канал
 		nlohmann::json subscribe_msg = {
 			{"method", "subscribe"},
 			{"params", {{"channel", "book"}, {"symbol", nlohmann::json::array({"BTC/USD"})}}}};
 
 		co_await write(subscribe_msg.dump());
-		std::cout << "✅ Subscribed to XBT/USD order book on Kraken" << std::endl;
+          spdlog::info("✅ Subscribed to XBT/USD order book on Kraken");
 	}
 	catch(const std::exception& e)
 	{
-		std::cerr << "Kraken connection error: " << e.what() << std::endl;
+          spdlog::error("Kraken connection error {}", e.what());
 	}
 }
 
@@ -98,11 +96,9 @@ asio::awaitable<void> KrakenWebSocketClient::read_loop()
 
 			auto json_msg = nlohmann::json::parse(msg, nullptr, false);
 
-			std::cout << "kraken msg: " << json_msg.dump(-1) << "\n";
-
 			if(json_msg.is_discarded())
 			{
-				std::cerr << "Invalid Kraken JSON: " << msg << std::endl;
+                    spdlog::error("Invalid Kraken JSON: {}", msg);
 				continue;
 			}
 
@@ -111,35 +107,73 @@ asio::awaitable<void> KrakenWebSocketClient::read_loop()
 				auto type = json_msg["type"].get<std::string>();
 				if(type == "snapshot")
 				{
-					auto& bids = json_msg["data"]["bids"];
-					auto& asks = json_msg["data"]["asks"];
+					auto& bids = json_msg["data"][0]["bids"];
+					auto& asks = json_msg["data"][0]["asks"];
 
 					orderBook_->clear();
 					for(const auto& bid : bids)
 					{
-						orderBook_->update_bid(std::stod(bid[0].get<std::string>()),
-										   std::stod(bid[1].get<std::string>()));
+                              auto start = std::chrono::steady_clock::now();
+						
+                              orderBook_->updateBid(bid["price"].get<double>(),
+										  bid["qty"].get<double>());
+                              
+                              auto end = std::chrono::steady_clock::now();
+                              auto durationUs = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+                              if (durationUs > 50)
+                              {
+                                   spdlog::warn("OrderBook update latency: {} us", durationUs);
+                              }                      
+
 					}
 					for(const auto& ask : asks)
 					{
-						orderBook_->update_ask(std::stod(ask[0].get<std::string>()),
-										   std::stod(ask[1].get<std::string>()));
+                              auto start = std::chrono::steady_clock::now();
+
+						orderBook_->updateAsk(ask["price"].get<double>(),
+										  ask["qty"].get<double>());
+
+                              auto end = std::chrono::steady_clock::now();
+                              auto durationUs = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+                              if (durationUs > 50)
+                              {
+                                   spdlog::warn("OrderBook update latency: {} us", durationUs);
+                              }
+                              
 					}
 				}
 				else if(type == "update")
 				{
-					auto& bids = json_msg["data"]["bids"];
-					auto& asks = json_msg["data"]["asks"];
+					auto& bids = json_msg["data"][0]["bids"];
+					auto& asks = json_msg["data"][0]["asks"];
 
 					for(const auto& bid : bids)
 					{
-						orderBook_->update_bid(std::stod(bid[0].get<std::string>()),
-										   std::stod(bid[1].get<std::string>()));
+                              auto start = std::chrono::steady_clock::now();
+
+						orderBook_->updateBid(bid["price"].get<double>(),
+										  bid["qty"].get<double>());
+
+                              auto end = std::chrono::steady_clock::now();
+                              auto durationUs = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+                              if (durationUs > 50)
+                              {
+                                   spdlog::warn("OrderBook update latency: {} us", durationUs);
+                              }
 					}
 					for(const auto& ask : asks)
 					{
-						orderBook_->update_ask(std::stod(ask[0].get<std::string>()),
-										   std::stod(ask[1].get<std::string>()));
+                              auto start = std::chrono::steady_clock::now();
+
+						orderBook_->updateAsk(ask["price"].get<double>(),
+										  ask["qty"].get<double>());
+
+                              auto end = std::chrono::steady_clock::now();
+                              auto durationUs = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+                              if (durationUs > 50)
+                              {
+                                   spdlog::warn("OrderBook update latency: {} us", durationUs);
+                              }
 					}
 				}
 			}
@@ -147,7 +181,7 @@ asio::awaitable<void> KrakenWebSocketClient::read_loop()
 	}
 	catch(const std::exception& e)
 	{
-		std::cerr << "Kraken read loop error: " << e.what() << std::endl;
+          spdlog::error("Kraken read loop error {}", e.what());
 	}
 }
 
@@ -159,6 +193,6 @@ asio::awaitable<void> KrakenWebSocketClient::write(const std::string& message)
 	}
 	catch(const std::exception& e)
 	{
-		std::cerr << "Kraken WS write error: " << e.what() << std::endl;
+          spdlog::error("Kraken WS write error: {}", e.what());
 	}
 }

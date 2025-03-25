@@ -9,8 +9,8 @@ set(HEADER_DIR ./)
 file(GLOB SRC_FILES ${SOURCES_DIR}/*.cpp)
 file(GLOB HEADER_FILES ${HEADER_DIR}/*.hpp)
 
-add_library(binaneClient STATIC ${SRC_FILES} ${HEADER_FILES})
+add_library(binanceClient STATIC ${SRC_FILES} ${HEADER_FILES})
 
-set_target_properties(binaneClient PROPERTIES LINKER_LANGUAGE CXX)
+set_target_properties(binanceClient PROPERTIES LINKER_LANGUAGE CXX)
 
-target_link_libraries(binaneClient PUBLIC ${CONAN_LIBS} orderbook)
+target_link_libraries(binanceClient PUBLIC ${CONAN_LIBS} orderbook)

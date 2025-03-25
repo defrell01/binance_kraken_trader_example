@@ -49,11 +49,11 @@ asio::awaitable<void> WebSocketClient::connect(const std::string& host,
 
 		co_await ws_.async_handshake(host, target, asio::use_awaitable);
 
-		std::cout << "Connected to " << host << target << std::endl;
+          spdlog::info("Connected to {} {}", host, target);
 	}
 	catch(const std::exception& e)
 	{
-		std::cerr << "Connection error: " << e.what() << std::endl;
+          spdlog::error("Connection err {}", e.what());
 	}
 }
 
@@ -69,15 +69,19 @@ asio::awaitable<void> WebSocketClient::read_loop()
 			std::string msg(beast::buffers_to_string(buffer.data()));
 
 			auto json_msg = nlohmann::json::parse(msg, nullptr, false);
-			orderBook_->update_order_book(json_msg);
-
-			std::cout << "Best bid: " << orderBook_->get_best_bid()
-					<< " | Best ask: " << orderBook_->get_best_ask() << std::endl;
+               auto start = std::chrono::steady_clock::now();
+			orderBook_->updateOrderBook(json_msg);
+               auto end = std::chrono::steady_clock::now();
+               auto durationUs = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+               if (durationUs > 50)
+               {
+                    spdlog::warn("OrderBook update latency: {} us", durationUs);
+               }
 		}
 	}
 	catch(const std::exception& e)
 	{
-		std::cerr << "Read loop error: " << e.what() << std::endl;
+          spdlog::error("Read loop error: {}", e.what());
 	}
 }
 
@@ -89,6 +93,6 @@ asio::awaitable<void> WebSocketClient::write(const std::string& message)
 	}
 	catch(const std::exception& e)
 	{
-		std::cerr << "Write error: " << e.what() << std::endl;
+          spdlog::error("Write error: {}", e.what());
 	}
 }

@@ -1,4 +1,4 @@
-#include <bot/order_book/orderBook.hpp>
+#include <bot/orderBook/orderBook.hpp>
 
 void OrderBook::clear()
 {
@@ -6,7 +6,7 @@ void OrderBook::clear()
 	asks.clear();
 }
 
-void OrderBook::update_bid(double price, double volume)
+void OrderBook::updateBid(double price, double volume)
 {
 	if(volume > 0)
 	{
@@ -18,7 +18,7 @@ void OrderBook::update_bid(double price, double volume)
 	}
 }
 
-void OrderBook::update_ask(double price, double volume)
+void OrderBook::updateAsk(double price, double volume)
 {
 	if(volume > 0)
 	{
@@ -30,11 +30,11 @@ void OrderBook::update_ask(double price, double volume)
 	}
 }
 
-void OrderBook::update_order_book(nlohmann::json& order_book)
+void OrderBook::updateOrderBook(nlohmann::json& orderBook)
 {
-	if(order_book.contains("b"))
+	if(orderBook.contains("b"))
 	{
-		for(const auto& bid : order_book["b"])
+		for(const auto& bid : orderBook["b"])
 		{
 			double price = std::stod(bid[0].get<std::string>());
 			double volume = std::stod(bid[1].get<std::string>());
@@ -46,9 +46,9 @@ void OrderBook::update_order_book(nlohmann::json& order_book)
 		}
 	}
 
-	if(order_book.contains("a"))
+	if(orderBook.contains("a"))
 	{
-		for(const auto& ask : order_book["a"])
+		for(const auto& ask : orderBook["a"])
 		{
 			double price = std::stod(ask[0].get<std::string>());
 			double volume = std::stod(ask[1].get<std::string>());
@@ -61,12 +61,12 @@ void OrderBook::update_order_book(nlohmann::json& order_book)
 	}
 }
 
-double OrderBook::get_best_bid() const
+double OrderBook::getBestBid() const
 {
 	return bids.empty() ? 0.0 : bids.rbegin()->first;
 }
 
-double OrderBook::get_best_ask() const
+double OrderBook::getBestAsk() const
 {
 	return asks.empty() ? 0.0 : asks.begin()->first;
 }

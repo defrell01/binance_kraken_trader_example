@@ -9,15 +9,15 @@ public:
 	absl::btree_map<double, double> bids;
 	absl::btree_map<double, double> asks;
 
-	void update_bid(double price, double volume);
+	void updateBid(double price, double volume);
 
-	void update_ask(double price, double volume);
+	void updateAsk(double price, double volume);
 
-	void update_order_book(nlohmann::json& order_book);
+	void updateOrderBook(nlohmann::json& orderBook);
 
 	void clear();
 
-	double get_best_bid() const;
+	double getBestBid() const;
 
-	double get_best_ask() const;
+	double getBestAsk() const;
 };
